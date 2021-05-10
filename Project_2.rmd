@@ -3,8 +3,8 @@ title: Is there any relationship between race and types of crime committed in 19
 author: "Santhosh Saravanan"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
     ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE, fig.align = "center", warning = F, message = F, R.options=list(max.print=100))

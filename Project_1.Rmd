@@ -4,8 +4,8 @@ title: What Types of Crimes are Principal Factors best at describing the rest of
 author: "Santhosh Saravanan"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
   '': default
 ---
   
