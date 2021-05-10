@@ -1,0 +1,351 @@
+---
+title: Is there any relationship between race and types of crime committed in 1978 America?
+author: "Santhosh Saravanan"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+    ```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, fig.align = "center", warning = F, message = F, R.options=list(max.print=100))
+
+# Edit the file starting below
+```
+## Name: Santhosh Saravanan
+## EID: sks3648
+#### Introduction
+
+##### The first dataset I chose was from the Vincentaelbuldock Github website concentrated on a dataset related to Guns and Crime in the United States in 1978. The columns of interest are the violent crime rate (per 100,000), murder rate (per 100,000), robbery rate (per 100,000), and incarceration rate in the state in the previous year. There are 664 observations and the data was collected by the US government with complements to Stock and Watson. This data is tidy and I am interested in furthering my data analysis in more crime statistics from the intriguing results of Project 1 and want to explore more gun statistics. I expect to find some correlation between violent crime rates, murder rates, and robbery rates and there may be some correlation between a person's ethnciity and the proportion of general crimes committed.
+#### Tidy
+```{r}
+#Import necessary packages
+library(readxl)
+library(tidyverse)
+library(ggpubr)
+Guns <- as.data.frame(read_csv("~/git/SDS348/Projects/Datasets/Guns.csv")) #read the Excel file and save as a dataframe
+glimpse(Guns)
+print(colnames(Guns)) #print the colNames to get an understanding of the data we're dealing with
+Guns1978 <- filter(Guns, year == 1978)
+Guns1978$X1 = NULL
+
+NE<- c("Connecticut","Maine","Massachusetts","New Hampshire",
+             "Rhode Island","Vermont","New Jersey","New York",
+             "Pennsylvania")
+MW<- c("Indiana","Illinois","Michigan","Ohio","Wisconsin",
+             "Iowa","Kansas","Minnesota","Missouri","Nebraska",
+             "North Dakota","South Dakota")
+S<- c("Delaware","District of Columbia","Florida","Georgia",
+            "Maryland","North Carolina","South Carolina","Virginia",
+            "West Virginia","Alabama","Kentucky","Mississippi",
+            "Tennessee","Arkansas","Louisiana","Oklahoma","Texas")
+W<- c("Arizona","Colorado","Idaho","New Mexico","Montana",
+            "Utah","Nevada","Wyoming","Alaska","California",
+            "Hawaii","Oregon","Washington")
+
+Guns1978 <- Guns1978 %>% 
+  mutate(Region = case_when(state %in% MW ~ "MidWest",
+                        state %in% W  ~ "West",
+                        state %in% NE  ~ "NorthEast",
+                        state %in% S ~ "South")) %>% arrange(desc(Region))
+```
+
+
+#### EDA
+```{r}
+violent <- ggplot(data=Guns1978, aes(x= `violent`)) + ggtitle("Counts of Violent Crimes")+
+  geom_histogram(bins=10, color="black", fill="light blue")
+murder <- ggplot(data=Guns1978, aes(x= `murder`)) + ggtitle("Counts of Murders ")+ geom_histogram(bins=10, color="black", fill="light blue")
+
+robbery <- ggplot(data=Guns1978, aes(x= `robbery`)) + ggtitle("Counts of Robberies") + 
+  geom_histogram(bins=10, color="black", fill="light blue")
+prisoners <- ggplot(data=Guns1978, aes(x= `prisoners`)) + ggtitle("Counts of Incarceration rates ")+ 
+  geom_histogram(bins=10, color="black", fill="light blue")
+ggarrange(violent, murder, robbery, prisoners,
+          ncol = 2, nrow = 2)
+```
+*From the plots above describing crime rates in 1978 USA, there seems to be more instances of 0-250 counts of robbery and it's quite uncommon for the number of robbery cases to go above 500. For Incarceration rates counts, there seems to be a relatively even distribution from 0-200, and it's uncommon for one to expect above 300 counts of incarceration rates. For violent rate counts, there is an even distribution of counts from 0-1000 counts and it's quite uncommon for counts to be significantly above 1000 cases. Lastly, for murder cases, it's rare for there to be more than 20 cases of murder in all of the states. These rates are per 100,000 residents in each state.*
+
+```{r}
+ggplot(Guns1978, aes(x=Region, y=robbery, fill = law)) + 
+  geom_bar(stat = "identity", width=0.2) + ggtitle("Robbery Rates by Region and Shall Law in Effect")
+ggplot(Guns1978, aes(x=Region, y=murder, fill = law)) + 
+  geom_bar(stat = "identity", width=0.2) + ggtitle("Murder Rates by Region and Shall Law in Effect")
+ggplot(Guns1978, aes(x=Region, y=violent, fill = law)) + 
+  geom_bar(stat = "identity", width=0.2) + ggtitle("Violent Crime Rates by Region and Shall Law in Effect")
+ggplot(Guns1978, aes(x=Region, y=prisoners, fill = law)) + 
+  geom_bar(stat = "identity", width=0.2) + ggtitle("Incarceration Rates by Region and Shall Law in Effect")
+```
+*From the respective bar plots shown, the South undoubtedly had the highest crime rates out of any other regions when it came to violent, murder, robbery, and incarceration rate. The distribution of law (Whether a state has a shall carry law) is heavily biased towards not having this law, so there may be a correlation between the crime rates and this categorical variable.*
+
+```{r}
+library(corrplot)
+# calculate correlations
+correlations <- cor(Guns1978[,2:11])
+# create correlation plot
+corrplot(correlations, method="circle")
+```
+```{r}
+# pair-wise scatterplots of all 4 attributes
+library(GGally)
+ggpairs(Guns1978[,2:5])
+```
+*These are statistically significant correlations between the four variables in question, regarding robbery rates, murder rates, violent rates, and incarceration rates in 1978 USA.*
+```{r manova}
+manova_guns <- manova(cbind(violent, murder, robbery, prisoners) ~ Region, data = Guns1978)
+summary(manova_guns)
+```
+*Significant differences were found among the 4 regions for at least one of the different type of crime rates per 100,000 residents(Pillai's trace  = 0.82663, pseudo F(12,138), p < 0.001).*
+```{r summaryAOV}
+summary.aov(manova_guns)
+```
+*at least one of the group means for crime rates differ.Post-hoc tests must be used to determine how many groups differ.*
+
+```{r post-hoc tests}
+    pairwise.t.test(Guns1978$murder,Guns1978$Region, p.adj="none")
+    pairwise.t.test(Guns1978$prisoners,Guns1978$Region, p.adj="none")
+```
+*At least one of the group means for crime rates differ by region.*
+
+
+```{r Beffer}
+#numTests is one test from MANOVA, 4 tests from ANOVA, and 12 tests from cross post-hoc tests
+numTests <- 1 + 4 +12
+probTypeIError <- 1 - (0.95)^17
+Bonferroni <- 0.05/numTests
+```
+*I performed 17 tests, the probability of a Type I error is 58.188% and the Bonferroni Level is 0.00294.*
+*None of my post hoc tests were no longer significant when they were significant before the adjustment.*
+```{r}
+#Check sample size assumptions
+Guns1978 %>%
+  group_by(Region) %>%
+  summarise(N = n())
+```
+*The number of states in each region is greater than 4, so the sample size assumptions have been met*.
+# Univariate Outliers
+```{r}
+library(rstatix)
+Guns1978 %>%
+  group_by(Region) %>%
+  identify_outliers(violent)
+Guns1978 %>%
+  group_by(Region) %>%
+  identify_outliers(murder)
+Guns1978 %>%
+  group_by(Region) %>%
+  identify_outliers(robbery)
+Guns1978 %>%
+  group_by(Region) %>%
+  identify_outliers(prisoners)
+```
+*There is at least one extreme outlier present in all of the key numerical variables.*
+
+# Check Multivariate Normality Assumption
+```{r}
+library(rstatix)
+Guns1978 %>%
+  select(murder,robbery,prisoners,violent) %>%
+  mshapiro_test()
+```
+*The multivariate normality Shapiro test  is significant (p-value < 0.05) so we can't assume multivariate normality*.
+
+# Identifying Multicollineraity
+```{r}
+Guns1978 %>%
+  cor_test(murder,robbery,prisoners,violent)
+```
+*There is no multicollinearity, as assessed by the respective Pearson correlations (p-values less than 0.00001).*
+```{r}
+# Create a scatterplot matrix by group
+library(GGally)
+results <- Guns1978 %>%
+  select(murder,robbery,prisoners,violent,Region) %>%
+  group_by(Region) %>%
+  doo(~ggpairs(.) + theme_bw(), result = "plots")
+results$plots
+```
+*There is  a linear relationship between the murder, violent, robbery, and prisoner rates in each Region group, as assessed by the scatter plots.*
+```{r Homogenity}
+library(rstatix)
+box_m(Guns1978[,c("murder","robbery","prisoners","violent")],Guns1978$Region)
+```
+*Box's M-test for Homogeneity of Covariance Matrices is statistically significant (p < 0.0001) so the data has violated the assumption of homogeneity of variance-covariance matrices.*
+
+```{r Levene}
+Guns1978 %>% 
+  gather(key = "variable", value = "value", murder,robbery,prisoners,violent) %>%
+  group_by(variable) %>%
+  levene_test(value ~ Region)
+```
+*The Levene's test is not significant for any of the variables (p > 0.05) so there is homogeneity of variances*.
+*In summary, this dataset violates two of MANOVA's key assumptions. I can only assume that the observations were independent and random.*
+
+#### Randomization Test
+```{r}
+obs_diff <- mean(Guns1978$afam[Guns1978$law == 'no']) - mean(Guns1978$afam[Guns1978$law == 'yes'])
+```
+```{r}
+set.seed(348)
+# 5000 Randomizations finding mean with original weight data
+# Find the new mean difference
+mean_diff_afam <- vector()
+# Create many randomizations with a for loop
+for(i in 1:5000){ 
+  temp <- data.frame(carryLaw = Guns1978$law, black = sample(Guns1978$afam))
+  mean_diff_afam[i] <- temp %>% 
+    group_by(carryLaw) %>%
+    summarize(means = mean(black)) %>%
+    summarize(mean_diff = diff(means)) %>%
+    pull
+}
+```
+```{r}
+{hist(mean_diff_afam, main="Distribution of the mean differences"); abline(v = obs_diff, col="red")}
+mean(mean_diff_afam > obs_diff)
+```
+*Null Hypothesis: There is not a difference between the mean proportions of African Americans aged between 10 and 64 in states with a shall carry law not in effect and a a shall carry law in effect in 1978 America.*
+*Alternative Hypothesis: There is a difference between the mean proportions of African Americans aged between 10 and 64 in states with a shall carry law not in effect and a a shall carry law in effect in 1978 America.*
+*We don't have statistically strong evidence to reject the null hypothesis that there is a difference between the mean proportions of African Americans aged between 10 and 64 in states with a shall carry law not in effect and a a shall carry law in effect in 1978 America (p-value > 0.05).*
+
+
+#### Linear Regression Model
+```{r Model}
+Guns <- Guns1978
+Guns$cauc <- Guns$cauc - mean(Guns$cauc, na.rm = TRUE)
+Guns$robbery <- Guns$robbery - mean(Guns$robbery, na.rm = TRUE)
+fit <- lm(murder ~ robbery + cauc + cauc*robbery, data = Guns)
+summary(fit)
+summary(lm(murder ~ robbery + cauc + cauc*robbery, data = Guns))$r.squared
+```
+```{r}
+ggplot(Guns,aes(y=murder,x=robbery,color=cauc)) +
+geom_point() + geom_smooth(method = "lm") + xlab(" Mean Robbery rate per 100,000") + ylab("Murder Rate per 100,000 )") + ggtitle("Murder Rate vs Robbery Rate and Proportion of Caucasians in 1978 America")
+```
+ *The mean murder rate per 100,000 is 8.0907 if the mean percent of the states' populations that are Caucasian (ages 10 to 64) is 0 and the mean robbery rate per 100,000 in all of the states is 0.*
+ 
+ *The mean murder rate per 100,000 increases by 0.0195621 ( incidents per 100,000) for every increase in mean robbery rate per 100,000 and keeping the mean percent of the states' Caucasian populations constant.*
+ 
+*The mean murder rate per 100,000 decreases by 0.1952035 ( incidents per 100,000) for every increase in mean percent of the states' Caucasian populations and keeping the mean robbery rate per 100,000 constant.*
+
+*The difference in mean murder rate per 100,000 decreases by 0.0001464 if the percent of a states' populations is Caucasian and commits high robbery rates compared to the states' population not having a high Caucasian proportion and having lower incidents of robbery rates.*
+
+*62.04557% of the total variation in murder rates per 100,000 in 1978 Americ ca can be explained by robbery rates per 100,000 in 1978 America and the proportion of Caucasians in 1978 America.*
+```{r}
+Guns$robbery <- Guns$robbery - mean(Guns$robbery,na.rm = TRUE)
+Guns$cauc <- Guns$cauc - mean(Guns$cauc,na.rm = TRUE)
+fit1 <- lm(murder ~ robbery + cauc + cauc*robbery, data = Guns)
+
+plot(fit1, which = 1)
+hist(fit1$residuals)
+plot(fit1, which = 2)
+```
+```{r}
+library(sandwich)
+library(lmtest)
+shapiro.test(fit1$residuals)
+ks.test(fit1$residuals,"pnorm",mean = 0,sd(fit$residuals))
+bptest(fit1)
+```
+*The normality assumption has been met as there isn't a clear pattern in the residuals and a good majority of the points lie on the straight line in the QQ plot ( linearity assumption has been met). The  Shapiro-Wilk Test  does not fail for the residuals so the residuals originated from a normal distribution. The Kolmogorov-Smirnov test fails to reject the null hypothesis that the distribution of residuals follow the normal distribution. However, the equal variance assumption has not been met with the results of the Breusch-Pagan test ( homoscedasticity).*
+
+```{r comparison}
+# Compare with robust SEs
+print(coeftest(fit,vcov. = vcovHAC))
+```
+ 
+*For the robust SE's, the difference in the interaction between robbery and cauc variables for standard error is negligible, in that the interaction term is still not statistically significant. For the cauc variable, this variable is no longer statistically significant compared to the original model because its p-value is now greater than 0.05 and the delta between the standard errors are far larger. For the robbery variable, there isn't too much of a standard error difference so this variable is still statistically significant.*
+
+```{r}
+##  Bootstrap from residuals
+# Repeat bootstrapping 5000 times, saving the coefficients each time
+resids_SEs <- replicate(5000, {
+  # Bootstrap your residuals (resample with replacement)
+  new_resids <- sample(fit$residuals, replace = TRUE)
+  # Consider a new response as fitted values plus residuals
+  boot_data <- Guns1978 
+  boot_data$new_y = fit$fitted.values + new_resids
+  # Fit regression model
+  fitboot <- lm(new_y ~ robbery + cauc + cauc*robbery, data = boot_data)
+  # Save the coefficients
+  coef(fitboot)
+})
+
+# Estimated SEs
+resids_SEs %>%
+  # Transpose the obtained matrices
+  t %>%
+  # Consider the matrix as a data frame
+  as.data.frame %>%
+  # Compute the standard error (standard deviation of the sampling distribution)
+  summarize_all(sd)
+```
+*The interaction terms are still not statistically significant when compared between the original model and the Bootstrap SE model. For the cauc variable, there is a difference in the standard error but it's still statistically significant as the p-values would still be way less than 0.05. For the robbery variable, there is a difference in the standard error but it's still statistically significant as the p-values would still be way less than 0.05.*
+
+#### Logistic Regression
+```{r logistic regression}
+# 1 means law in effect, 0 means law not in effect
+Guns1978 <- Guns1978 %>%
+  mutate(y = ifelse(law == "yes", 1, 0))
+fit1 <- glm(y ~ robbery + murder, data= Guns1978, family = "binomial")
+summary(fit1)
+exp(coefficients(fit1))
+```
+*While holding other predictors constant, the odds of a shall carry law  in effect for a robbery charge increase.While holding other predictors constant ,the odds of a shall carry law for a murder charge increase.*
+
+```{r}
+# Based on predicted probabilities...
+Guns1978$prob1 <- predict(fit1, type = "response")
+
+# ... we can classify a clump as malignant or not (for example apply a cutoff of 0.5)
+Guns1978$predicted <- ifelse(Guns1978$prob1 > 8.744202e-03, "yes", "no")
+```
+```{r confusion}
+# Confusion matrix: compare true to predicted condition
+table(true_condition = Guns1978$law, predicted_condition = Guns1978$predicted) %>% 
+  addmargins
+# Accuracy (correctly classified cases)
+(4+9)/51 
+
+# Sensitivity (True Positive Rate, TPR)
+4/(4+38)
+
+# Specificity (True Negative Rate, TNR)
+9/(9+38)
+
+# Precision (Positive Predictive Value, PPV)
+4/4+0
+
+```
+```{r}
+# Predicted log odds 
+Guns1978$logit <- predict(fit1, type = "link") 
+# Density plot of log-odds for each outcome
+Guns1978 %>%
+  ggplot() + 
+  geom_density(aes(logit, color = law, fill = law), alpha = .4) +
+    geom_rug(aes(logit, color = law)) +
+  geom_text(x = -15, y = .07, label = "TN = 9") +
+  geom_text(x = -2, y = .008, label = "FN = 38") +
+  geom_text(x = -1, y = .006, label = "FP = 0") +
+  geom_text(x = 0, y = .04, label = "TP = 4") +
+  theme(legend.position = c(.85,.85)) +
+  geom_vline(xintercept = 0) + 
+  xlab("logit (log-odds)") + ggtitle("Density plot of log-odds for each outcome")
+```
+```{r ROC}
+# Call the library plotROC
+library(plotROC) 
+
+# Plot ROC depending on values of y and its probabilities displaying some cutoff values
+ROCplot1 <- ggplot(Guns1978) + 
+  geom_roc(aes(d = y, m = prob1), cutoffs.at = list(0.1, 0.5, 0.9))
+ROCplot1
+```
+```{r AUC}
+# Calculate the area under the curve still using the library plotROC with function calc_auc
+calc_auc(ROCplot1)
+```
+*According to the rule of thumb, this model is excellent in terms of prediction power as its AUC score is greater than 0.9. However, I believe there has been significant overfitting done with my logistic regression model.*
+
+
+
